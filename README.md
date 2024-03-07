@@ -6,4 +6,5 @@ This is currntly being worked on. When done, an installer/zip and a guide will b
 Code used: 
 
 https://github.com/ThePBone/BudsPro-Headtracking - Getting the IMU data from the buds.
+
 https://github.com/yoyobuae/python-slimevr/tree/main - Getting the IMU data into SlimeVR Server
