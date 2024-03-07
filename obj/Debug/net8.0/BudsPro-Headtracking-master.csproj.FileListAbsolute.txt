@@ -1,0 +1,4 @@
+E:\Alexa\Downloads\BudsPro-Headtracking-master\obj\Debug\net8.0\BudsPro-Headtracking-master.GeneratedMSBuildEditorConfig.editorconfig
+E:\Alexa\Downloads\BudsPro-Headtracking-master\obj\Debug\net8.0\BudsPro-Headtracking-master.AssemblyInfoInputs.cache
+E:\Alexa\Downloads\BudsPro-Headtracking-master\obj\Debug\net8.0\BudsPro-Headtracking-master.AssemblyInfo.cs
+E:\Alexa\Downloads\BudsPro-Headtracking-master\obj\Debug\net8.0\BudsPro-Headtracking-master.csproj.CoreCompileInputs.cache
