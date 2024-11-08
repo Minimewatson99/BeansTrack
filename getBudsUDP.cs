@@ -11,7 +11,9 @@ using UnityEngine;
  * x, y, z, w
  * 
  * - Recenter rotation using space bar
-*/
+ * 
+ * Modified by xlinka to include quaternion smoothing and consistency check.
+ */
 
 using System;
 using System.Text;
@@ -21,8 +23,8 @@ using System.Threading;
 
 public class getBudsUDP : MonoBehaviour {
 
-	// receiving Thread
-	Thread receiveThread;
+    // receiving Thread
+    Thread receiveThread;
 
     // udpclient object
     UdpClient client;
@@ -31,178 +33,116 @@ public class getBudsUDP : MonoBehaviour {
     public String TARGET_IP = "127.0.0.1";
     public int TARGET_PORT = 6969;
 
-    public int RECEIVING_PORT = 12562; // define > init
+    public int RECEIVING_PORT = 12562;
 
     public float ID = -1;
-    public Vector3 gyro = new Vector3(.0f,.0f,.0f);
-    public Vector3 acc = new Vector3(.0f,.0f,.0f);
-    public Vector4 rot = new Vector4(.0f,.0f,.0f,.0f);
+    public Vector3 gyro = new Vector3(.0f, .0f, .0f);
+    public Vector3 acc = new Vector3(.0f, .0f, .0f);
+    public Vector4 rot = new Vector4(.0f, .0f, .0f, .0f);
 
     public int sent_num = 0;
 
+    // Variables for smoothing and consistency check (added by xlinka)
+    private Vector4 lastRot = new Vector4(0f, 0f, 0f, 1f); // Initial quaternion for consistency check
+    public float smoothFactor = 5.0f; // Adjust for more or less smoothing
 
-    
-    public getBudsUDP(int port){
+    public getBudsUDP(int port) {
         this.RECEIVING_PORT = port;
     }
 
-    IEnumerator Start()
-    {
+    IEnumerator Start() {
         Debug.Log("UDPSendReceive: Starting");
         this.init();
 
         yield return new WaitForSeconds(1.0f);
-
     }
-    void Update()
-    {
-        if (Input.GetKeyDown("space"))
-        {
+
+    void Update() {
+        if (Input.GetKeyDown("space")) {
             print("space key was pressed");
             sent_num += 1;
 
             UdpClient udpClient = new UdpClient(TARGET_IP, TARGET_PORT);
-            Debug.Log("UDPSendReceive: sending"+TARGET_IP+":"+TARGET_PORT);
-            
+            Debug.Log("UDPSendReceive: sending" + TARGET_IP + ":" + TARGET_PORT);
 
-            byte[] sendBytes2 = ConvertDoubleToByte(new double[]{sent_num, sent_num*0.3, sent_num*0.5});
-            
-            try{
-                // Byte[] sendBytes = Encoding.ASCII.GetBytes("sending test"+sent_num);
-                // udpClient.Send(sendBytes, sendBytes.Length);
+            byte[] sendBytes2 = ConvertDoubleToByte(new double[] { sent_num, sent_num * 0.3, sent_num * 0.5 });
 
-
+            try {
                 udpClient.Send(sendBytes2, sendBytes2.Length);
-            }
-            catch ( Exception e ){
-                Console.WriteLine( e.ToString());
+            } catch (Exception e) {
+                Console.WriteLine(e.ToString());
             }
         }
-        transform.eulerAngles = new Vector3(rot.x,rot.y,rot.z);
-        // transform.Rotate(rot, Space.Self);
-        // Debug.Log("UDPSendReceive: receiveThread background=" + receiveThread.IsBackground);
+
+        // Smoothly interpolate rotation using Quaternion.Slerp (added by xlinka)
+        Quaternion currentRotation = transform.rotation;
+        Quaternion targetRotation = new Quaternion(rot.x, rot.y, rot.z, rot.w);
+        transform.rotation = Quaternion.Slerp(currentRotation, targetRotation, Time.deltaTime * smoothFactor);
     }
 
     // OnDestroy
-    public void OnDestroy()
-    {
+    public void OnDestroy() {
         receiveThread.Abort();
         client.Close();
         Debug.Log("UDPSendReceive: OnDestroy");
     }
 
-	// init
-	private void init()
-	{		
-        // Define local endpoint (where messages are received).
-        // Create a new thread for the reception create incoming messages.
-		receiveThread = new Thread(new ThreadStart(ReceiveData));
-		receiveThread.IsBackground = false;
-		receiveThread.Start();
+    // init
+    private void init() {
+        receiveThread = new Thread(new ThreadStart(ReceiveData));
+        receiveThread.IsBackground = false;
+        receiveThread.Start();
     }
 
-
-
-    public static float[] ConvertByteToFloat(byte[] array)
-    {
+    public static float[] ConvertByteToFloat(byte[] array) {
         float[] floatArr = new float[10];
-        for (int i = 0; i < floatArr.Length; i++)
-        {
-            // if (BitConverter.IsLittleEndian)
-            // {
-            //     Array.Reverse(array, i * 4, 4);
-            // }
+        for (int i = 0; i < floatArr.Length; i++) {
             floatArr[i] = BitConverter.ToSingle(array, i * 4);
         }
         return floatArr;
     }
-    public static byte[] ConvertDoubleToByte(double[] array)
-    {
-        byte[] byte_arr = new byte[8*array.Length];
-        for (int i = 0; i < array.Length; i++)
-        {
-            byte[] bytes = BitConverter.GetBytes( array[i]); 
-            Array.Copy(bytes, 0, byte_arr , 8*i, bytes.Length);
+
+    public static byte[] ConvertDoubleToByte(double[] array) {
+        byte[] byte_arr = new byte[8 * array.Length];
+        for (int i = 0; i < array.Length; i++) {
+            byte[] bytes = BitConverter.GetBytes(array[i]);
+            Array.Copy(bytes, 0, byte_arr, 8 * i, bytes.Length);
         }
         return byte_arr;
     }
 
-
-
-	// receive thread
-	private void ReceiveData()
-	{
-		//char[] delim = {'#'};
-		
-		client = new UdpClient(RECEIVING_PORT);
+    // receive thread
+    private void ReceiveData() {
+        client = new UdpClient(RECEIVING_PORT);
         Debug.Log("UDPSendReceive: listening at port.... " + RECEIVING_PORT);
-		while (true)
-		{
-			try
-			{
-				// Bytes received.
-				IPEndPoint anyIP = new IPEndPoint(IPAddress.Any, 0);
-                // Debug.Log("UDPSendReceive: get input");
+        while (true) {
+            try {
+                IPEndPoint anyIP = new IPEndPoint(IPAddress.Any, 0);
                 byte[] data = client.Receive(ref anyIP);
-                String receive_str = Encoding.UTF8.GetString(data);
-                // Debug.Log("UDPSendReceive: " + receive_str);
+                string receiveStr = Encoding.UTF8.GetString(data);
 
-                string[] subs = receive_str.Split(',');
-                rot.x = float.Parse(subs[0]);
-                rot.y = float.Parse(subs[1]);
-                rot.z = float.Parse(subs[2]);
-                // rot.w = float.Parse(subs[3]);
+                string[] subs = receiveStr.Split(',');
+                Vector4 newRot = new Vector4(
+                    float.Parse(subs[0]),
+                    float.Parse(subs[1]),
+                    float.Parse(subs[2]),
+                    float.Parse(subs[3])
+                );
 
-                // Array.Reverse(data, 0, 4);
-                // int num_of_input_set = BitConverter.ToInt16(data, 0);
-                // Debug.Log("UDPSendReceive: num_of_input_set:" + num_of_input_set);
-                
+                // Check for quaternion consistency (added by xlinka)
+                float dot = Vector4.Dot(lastRot, newRot);
+                if (dot < 0.0f) {
+                    // Negate the quaternion if dot product is negative
+                    newRot = new Vector4(-newRot.x, -newRot.y, -newRot.z, -newRot.w);
+                }
 
+                // Update rotation and last rotation for the next frame
+                rot = newRot;
+                lastRot = newRot;
 
-
-                // for (int i = 0; i < num_of_input_set; i++)
-                // {
-                //     byte[] oneset_arr = new byte[52];
-
-                //     Array.Copy(data, 4+52*i, oneset_arr, 0, 52);
-                //     // convert received byte array to float array.
-                //     float[] values = ConvertByteToFloat(oneset_arr); // Gx,Gy,Gz, ACCx,ACCy,ACCz, ROTx,ROTy,ROTz,ROTw
-
-                //     // Array.Reverse(oneset_arr, 40, 8);
-                //     // Array.Reverse(oneset_arr, 48, 4);
-
-                //     double device_time = BitConverter.ToInt64(oneset_arr, 40);
-                //     int dev_id_int = BitConverter.ToInt16(oneset_arr, 48);
-                //     Debug.Log("UDPSendReceive: device_time:" + device_time);
-                //     Debug.Log("UDPSendReceive: dev_id:" + dev_id_int);
-
-                //     // these values can be modified..
-                //     gyro[0] = values[0];
-                //     gyro[1] = values[1];
-                //     gyro[2] = values[2];
-
-                //     acc[0] = values[3];
-                //     acc[1] = values[4];
-                //     acc[2] = values[5];
-
-                //     rot.x = values[6];
-                //     rot.y = values[7];
-                //     rot.z = values[8];
-                //     rot.w = values[9];
-                //     Debug.Log("UDPSendReceive: sensorval:" + values[0]+","+ values[1]+","+ values[2]+"|"+
-                //         values[3] + "," + values[4] + "," + values[5]+"|"+
-                //         values[6] + "," + values[7] + "," + values[8] + "," + values[9]);
-
-
-                // }
-                
-
+            } catch (Exception err) {
+                Debug.LogError(err.ToString());
             }
-            catch (Exception err)
-			{
-				print(err.ToString());
-			}
-		}
-	}
-
+        }
+    }
 }
